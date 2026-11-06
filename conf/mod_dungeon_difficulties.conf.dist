@@ -1,0 +1,71 @@
+[worldserver]
+
+########################################
+# mod-dungeon-difficulties: heroic creature spell scaling (dungeon difficulties E2)
+########################################
+#
+#    DungeonDifficulties.Enable
+#        Description: Scale stock creature spells on the heroic dungeons in DungeonDifficulties.Heroic.Maps so each
+#                     hit takes the same share of a player's health as the creature's normal version does (see the
+#                     README, "The rule"). Creature heals on creatures scale by the target's heroic / normal health.
+#        Default:     1 - Enabled
+#                     0 - Disabled
+#
+
+DungeonDifficulties.Enable = 1
+
+#
+#    DungeonDifficulties.Heroic.Maps
+#        Description: Map ids (spaces or commas) whose heroic difficulty the rule acts on. Add a dungeon once its
+#                     heroic templates exist (dbc-tools heroic declarations); normal difficulty is never touched.
+#        Example:     "36 33"
+#        Default:     "36" - Deadmines
+#
+
+DungeonDifficulties.Heroic.Maps = "36"
+
+#
+#    DungeonDifficulties.ReferenceHealth
+#        Description: Reference health rows "<level>[tier]:<nonTank>:<tank>", the same format and value as
+#                     BossMechanics.ReferenceHealth.Rows (paste the same string into both). The rule reads the
+#                     non-tank column: the heroic (h) row at the caster's level over the normal row at the
+#                     caster's normal level. Without an "h" row heroic reads the normal rows by level. A malformed
+#                     value logs a warning and uses the default.
+#        Default:     "20:1300:1290 60:3670:3710 60h:4120:4110" - the E3 measurement (2026-11-05)
+#
+
+DungeonDifficulties.ReferenceHealth = "20:1300:1290 60:3670:3710 60h:4120:4110"
+
+#
+#    DungeonDifficulties.Heroic.SpellExceptions
+#        Description: Stock spell ids (spaces or commas) the rule leaves unscaled on heroic: their heroic value is
+#                     whatever the engine computes at the heroic creature's level. Matches the cast id or, for a
+#                     SpellDifficulty swap, the normal spell it came from. Spells from 200000 up (dbc-tools
+#                     custom spells, boss mechanics) are never scaled and need no entry.
+#        Example:     "5208 6304"
+#        Default:     ""
+#
+
+DungeonDifficulties.Heroic.SpellExceptions = ""
+
+#
+#    DungeonDifficulties.Heroic.RequireHeroicTemplate
+#        Description: Scale only casters running a heroic difficulty template (their current template entry differs
+#                     from the normal entry). A creature without one (missed by the heroic generator) keeps its stock
+#                     spells, matching its stock melee. 0 scales every non-player-controlled creature on the map
+#                     (playtest switch; triggers without heroic templates then scale too).
+#        Default:     1 - Enabled
+#                     0 - Disabled
+#
+
+DungeonDifficulties.Heroic.RequireHeroicTemplate = 1
+
+#
+#    DungeonDifficulties.Debug
+#        Description: Log every scaled hit (caster, spell, amount before and after, F) to module.dungeondifficulties.
+#                     Noisy: playtests only.
+#        Default:     0 - Disabled
+#                     1 - Enabled
+#
+
+DungeonDifficulties.Debug = 0
