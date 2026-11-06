@@ -254,6 +254,35 @@ namespace
         CHECK(FactorOf(nothing, Group::DirectDamage, sc) == 1.0);
     }
 
+    void TestWeaponPartIsThePerHitDamage()
+    {
+        // A heroic boss (warrior, level 60, DamageModifier 20.68, 2.0 s swing, BaseVariance 1) casts a flat school
+        // damage 50 + weapon damage +10 spell from its level 20 normal self. The weapon part is what the engine rolls
+        // (Creature::CalculateMinMaxDamage): (weapon + AP / 14) x DamageModifier x swing, weapon 1x to 1.5x base.
+        double const base = kWarrior.at(60);
+        double const apPart = 252.0 / 14.0;
+        double const minHit = (base + apPart) * 20.68 * 2.0;
+        double const maxHit = (1.5 * base + apPart) * 20.68 * 2.0;
+        double const weapon = MeanWeaponDamage(minHit, maxHit);
+        CHECK_NEAR(weapon, 2500.3, 0.1);
+        CHECK(MeanWeaponDamage(-5.0, 10.0) == 5.0);    // the engine clamps a negative roll to 0
+
+        Scenario sc = Deadmines(20, 20, kWarrior);
+        sc.weaponAverage = weapon;
+        SpellData strike = Spell(28, 20, 20, 0, false, { Fx(Effect::SchoolDamage, 0, 49, 1),
+            Fx(Effect::WeaponDamage, 0, 9, 1) });
+        GroupResult r = GroupFactor(strike, strike, Group::DirectDamage, sc);
+        CHECK_NEAR(r.actual, 50.0 + weapon + 10.0, 1e-9);
+        // The landed hit (about 2,560) becomes the normal school part x Fref plus the heroic weapon part: ~2,669.
+        double const landed = r.actual * r.factor;
+        CHECK_NEAR(landed, 50.0 * kFref + weapon + 10.0, 1e-6);
+        CHECK_NEAR(landed, 2668.8, 0.1);
+
+        // With the bare base weapon (1.25 x 33.96 = 42) as the weapon part F would be ~2.06 and the hit ~5,280.
+        sc.weaponAverage = 1.25 * base;
+        CHECK(GroupFactor(strike, strike, Group::DirectDamage, sc).factor > 2.0);
+    }
+
     void TestHeals()
     {
         // Cookie's Cooking 5174 (flat heal 110 + d19) on a creature whose heroic template has 12.74x the health.
@@ -282,6 +311,55 @@ namespace
         // A leech's heal back (no heal effect) is never scaled twice.
         SpellData leech = Spell(25, 20, 20, 0, false, { Fx(Effect::HealthLeech, 0, 99, 1) });
         CHECK(FactorOf(leech, Group::DirectHeal, sc) == 1.0);
+
+        // Cookie on heroic: 2,904 health on normal (basehp0 484 x 6), 330,000 on heroic, ratio 113.6. A heal keeps its
+        // share of the health uncapped (the damage rail is 20x): 120 -> ~13,636 per cast, ~4.1% as on normal.
+        double const cookieRatio = 330000.0 / 2904.0;
+        sc.wantedRatio = [cookieRatio](std::uint32_t) { return cookieRatio; };
+        sc.targetMaxHealth = 330000.0;
+        GroupResult r = GroupFactor(cooking, cooking, Group::DirectHeal, sc);
+        CHECK_NEAR(r.factor, cookieRatio, 1e-9);
+        CHECK(r.factor > kMaxFactor);
+        CHECK_NEAR(r.actual * r.factor, 13636.4, 0.1);
+        CHECK_NEAR(r.actual * r.factor / 330000.0, 120.0 / 2904.0, 1e-9);
+        CHECK(ScaleAmount(std::uint32_t(120), r.factor) == 13636);
+        CHECK_NEAR(FactorOf(hot, Group::PeriodicHeal, sc), cookieRatio, 1e-9);     // a HoT too
+    }
+
+    void TestHealTickMarker()
+    {
+        int player = 0;
+        int creature = 0;
+        int spell = 0;
+        int other = 0;
+        std::uint32_t tickAmount = 0;
+        std::uint32_t healAmount = 0;
+        HealTickMarker m;
+
+        // The periodic heal tick: (target, caster) marked, then consumed by the ModifyHealReceived on the same amount.
+        m.Mark(&creature, &other, &spell, &tickAmount);
+        CHECK(m.Consume(&creature, &other, &spell, &tickAmount));
+        CHECK(!m.Consume(&creature, &other, &spell, &tickAmount));    // consumed once
+
+        // A spell with both a periodic heal and a periodic damage aura marks on its damage tick (the player); no heal
+        // follows. A direct heal of the same spell later (HealBySpell: healer, target swapped) never matches.
+        m.Mark(&player, &creature, &spell, &tickAmount);
+        CHECK(!m.Consume(&creature, &player, &spell, &healAmount));
+        m.Mark(&player, &creature, &spell, &tickAmount);
+        CHECK(!m.Consume(&player, &creature, &spell, &healAmount));   // even with the units in tick order
+
+        // Any damage hook clears a stale mark before it can be read.
+        m.Mark(&creature, &other, &spell, &tickAmount);
+        m.Clear();
+        CHECK(!m.Consume(&creature, &other, &spell, &tickAmount));
+
+        // Another spell or another caster is not the tick.
+        m.Mark(&creature, &other, &spell, &tickAmount);
+        CHECK(!m.Consume(&creature, &other, &other, &tickAmount));
+        m.Mark(&creature, &other, &spell, &tickAmount);
+        CHECK(!m.Consume(&creature, &player, &spell, &tickAmount));
+        // An empty mark never matches, even null against null.
+        CHECK(!m.Consume(nullptr, nullptr, nullptr, nullptr));
     }
 
     void TestSwaps()
@@ -359,10 +437,14 @@ namespace
         CHECK_NEAR(r.wanted, 500.0, 1e-9);
         CHECK_NEAR(r.factor, 1.0 / 3.0, 1e-9);
 
-        // The factor never leaves [0, kMaxFactor].
+        // A damage factor never leaves [0, kMaxFactor]; a heal's is not capped.
         SpellData tiny = Spell(26, 20, 20, 0, false, { Fx(Effect::SchoolDamage, 0, 0, 1) });
         SpellData huge = Spell(27, 20, 20, 0, false, { Fx(Effect::SchoolDamage, 0, 9999, 1) });
         CHECK(GroupFactor(tiny, huge, Group::DirectDamage, sc).factor == kMaxFactor);
+        SpellData tinyHeal = Spell(29, 20, 20, 0, false, { Fx(Effect::Heal, 0, 0, 1) });
+        SpellData hugeHeal = Spell(30, 20, 20, 0, false, { Fx(Effect::Heal, 0, 9999, 1) });
+        sc.wantedRatio = [](std::uint32_t) { return 1.0; };
+        CHECK_NEAR(GroupFactor(tinyHeal, hugeHeal, Group::DirectHeal, sc).factor, 10000.0, 1e-9);
     }
 
     void TestGate()
@@ -500,7 +582,9 @@ int main()
     TestMeanEffectValue();
     TestDeadminesCategories();
     TestMixedEffects();
+    TestWeaponPartIsThePerHitDamage();
     TestHeals();
+    TestHealTickMarker();
     TestSwaps();
     TestGate();
     TestScaleAmount();

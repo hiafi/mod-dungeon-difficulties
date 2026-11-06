@@ -58,11 +58,20 @@ For a single scaled effect this is `Fref / G`, G being the engine's own growth f
 | Heal percent, heal max health, obs mod health | `ModifyHealReceived` | unchanged |
 
 A spell that mixes types in one hook (school + weapon damage, two periodic auras) gets the weighted blend, with the
-unchanged parts weighted by their own expected amount (weapon average, percent x target max health). The periodic heal
-tick also calls the periodic damage hook; a spell with a heal aura and no damage aura is skipped there. Leech heals
-(no heal effect) are never scaled again. `ModifyHealReceived` arrives as (healer, target) from `Unit::HealBySpell` and
-as (target, healer) from the periodic tick: the periodic damage hook leaves a thread-local marker for heal spells that
-tells them apart.
+unchanged parts weighted by their own expected amount (percent x target max health; for weapon effects the caster's
+per-hit weapon damage as the engine rolls it, `Unit::CalculateDamage`'s min / max with AP, `DamageModifier` and swing,
+not the bare base weapon). The periodic heal tick also calls the periodic damage hook; a spell with a heal aura and no
+damage aura is skipped there. Leech heals (no heal effect) are never scaled again. `ModifyHealReceived` arrives as
+(healer, target) from `Unit::HealBySpell` and as (target, healer) from the periodic tick: the periodic damage hook
+leaves a thread-local marker (units, spell and the amount variable) for heal spells that tells them apart, and every
+damage hook call clears it first.
+
+A damage factor is capped at 20 against a degenerate spell (an expected amount near zero). Heals are not capped: a
+creature heal on a creature keeps its share of the target's max health, so Cookie's Cooking (120 on a 2,904 health
+Cookie) heals about 13,600 on his 330,000 health heroic template.
+
+Not modelled: `spell_bonus_data` `ap_bonus` / `ap_dot_bonus`. `Unit::SpellDamageBonusDone` adds the caster's attack
+power times the coefficient, and that share is multiplied by F too. No Deadmines spell has one; check at each rollout.
 
 ### SpellDifficulty swaps
 

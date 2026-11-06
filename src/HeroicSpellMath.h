@@ -33,7 +33,17 @@
  *                  effects gets their blend (exact in total when they tick together).
  *   DirectHeal     ModifyHealReceived from Unit::HealBySpell: heal, heal percent, heal max health.
  *   PeriodicHeal   ModifyHealReceived from the periodic heal tick: periodic heal, obs mod health (percent).
- * Creature heals on creatures use the target's heroic / normal max health ratio in place of Fref.
+ * Creature heals on creatures use the target's heroic / normal max health ratio in place of Fref, uncapped: a heal
+ * keeps its share of the target's max health (Cookie's Cooking stays ~4.1% of Cookie per cast on heroic, ~114x).
+ *
+ * The weapon part of a weapon effect is the caster's computed per-hit weapon damage (Scenario::weaponAverage, the
+ * min / max the engine rolls in Unit::CalculateDamage: weapon plus AP, DamageModifier and swing included), so a mixed
+ * school + weapon spell blends against what actually lands.
+ *
+ * Not modelled: spell_bonus_data ap_bonus / ap_dot_bonus. Unit::SpellDamageBonusDone adds the caster's attack power
+ * times that coefficient after the hook's effect base is computed, so that share is multiplied by F too (and creature
+ * AP grows with level). Deadmines has none (Fire Blast 2138 has a direct_bonus only, and creatures have no spell
+ * power); re-check at each rollout.
  */
 
 #ifndef MOD_DUNGEON_DIFFICULTIES_HEROIC_SPELL_MATH_H
@@ -58,7 +68,9 @@ namespace DungeonDifficulties
         // Custom spells (dbc-tools ids, mod-boss-mechanics resolve spells 205001-205007) are flat by design.
         constexpr std::uint32_t kCustomSpellIdFloor = 200000;
         constexpr std::size_t kMaxEffects = 3;
-        // A safety rail against a degenerate spell (an actual amount near zero): F never leaves [0, kMaxFactor].
+        // A safety rail against a degenerate damage spell (an actual amount near zero): a damage F never leaves
+        // [0, kMaxFactor]. Heals are not capped: their wanted ratio is the healed creature's heroic / normal max
+        // health, which is above 100 for a heroic boss, and a heal keeps its share of that health.
         constexpr double kMaxFactor = 20.0;
 
         // SpellEffects / AuraType values the rule reads (checked against the engine in HeroicSpellScaling.cpp).
@@ -305,6 +317,11 @@ namespace DungeonDifficulties
             return Role::None;
         }
 
+        inline bool IsHeal(Group g)
+        {
+            return g == Group::DirectHeal || g == Group::PeriodicHeal;
+        }
+
         inline bool HasRole(SpellData const& s, Group g, Role r)
         {
             for (EffectData const& e : s.effects)
@@ -333,7 +350,9 @@ namespace DungeonDifficulties
             // The multiplier a Scaled effect should end at, by normal level: Fref(L) for damage, the target's heroic /
             // normal max health ratio for creature heals on creatures.
             std::function<double(std::uint32_t normalLevel)> wantedRatio;
-            double weaponAverage = 0.0;                  // the caster's average weapon damage for the spell's attack
+            // The caster's mean per-hit weapon damage for the spell's attack type, as the engine rolls it
+            // (MeanWeaponDamage of Unit::CalculateDamage's min / max), not the bare base weapon.
+            double weaponAverage = 0.0;
             double targetMaxHealth = 0.0;
         };
 
@@ -423,9 +442,56 @@ namespace DungeonDifficulties
                 return r;      // nothing to scale: F = 1 exactly
             if (r.actual <= 0.0)
                 return r;
-            r.factor = std::clamp(r.wanted / r.actual, 0.0, kMaxFactor);
+            double const factor = std::max(0.0, r.wanted / r.actual);
+            r.factor = IsHeal(g) ? factor : std::min(factor, kMaxFactor);
             return r;
         }
+
+        // The mean of the min / max weapon damage the engine rolls for a weapon spell (Spell::EffectWeaponDmg ->
+        // Unit::CalculateDamage reads UNIT_FIELD_MINDAMAGE / MAXDAMAGE or their ranged / off-hand pair).
+        inline double MeanWeaponDamage(double minDamage, double maxDamage)
+        {
+            return (std::max(0.0, minDamage) + std::max(0.0, maxDamage)) / 2.0;
+        }
+
+        // Tells the periodic heal tick's ModifyHealReceived call from Unit::HealBySpell's. The tick
+        // (AuraEffect::HandlePeriodicHealAurasTick) calls ModifyPeriodicDamageAurasTick and right after it
+        // ModifyHealReceived with the same (target, caster), spell and amount variable; HealBySpell passes (healer,
+        // target) and an amount of its own. A periodic tick of a heal spell marks its call (amount address
+        // included), every other damage hook call clears the mark, and ModifyHealReceived consumes it. A spell with
+        // both a periodic heal and a periodic damage aura marks on its damage tick too, with no heal call after it:
+        // the next damage hook clears that mark, and a later direct heal cannot match it (another amount variable,
+        // the units swapped).
+        // Pointers are compared, never dereferenced.
+        class HealTickMarker
+        {
+        public:
+            void Clear() { _mark = {}; }
+
+            void Mark(void const* target, void const* caster, void const* spell, void const* amount)
+            {
+                _mark = { target, caster, spell, amount };
+            }
+
+            // Whether this ModifyHealReceived call (first, second, spell, amount) is the marked periodic tick; always
+            // clears the mark.
+            bool Consume(void const* first, void const* second, void const* spell, void const* amount)
+            {
+                Entry const m = _mark;
+                Clear();
+                return m.spell && m.spell == spell && m.target == first && m.caster == second && m.amount == amount;
+            }
+
+        private:
+            struct Entry
+            {
+                void const* target = nullptr;
+                void const* caster = nullptr;
+                void const* spell = nullptr;
+                void const* amount = nullptr;
+            };
+            Entry _mark;
+        };
 
         // Fref at one normal level: heroic row at the caster's heroic level over the normal row at that level.
         inline double ReferenceRatio(RefHealth::Table const& t, std::uint32_t heroicLevel, std::uint32_t normalLevel)

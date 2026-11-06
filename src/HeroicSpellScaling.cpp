@@ -7,8 +7,9 @@
  * - ModifyPeriodicDamageAurasTick: group PeriodicDamage. The periodic heal tick calls it too, right before
  *   ModifyHealReceived; a spell with a periodic heal aura and no periodic damage aura is that path and is skipped.
  * - ModifyHealReceived: Unit::HealBySpell passes (healer, target), the periodic heal tick passes (target, healer). The
- *   periodic hook leaves a thread-local marker of its (target, caster, spell) call for heal spells, which tells the
- *   two apart: a match is the periodic path (group PeriodicHeal), anything else the direct one (group DirectHeal).
+ *   periodic hook leaves a thread-local Heroic::HealTickMarker of its (target, caster, spell, amount) call for heal
+ *   spells, which tells the two apart: a match is the periodic path (group PeriodicHeal), anything else the direct one
+ *   (group DirectHeal). Every damage hook call clears the marker first, so it never outlives the tick that set it.
  *
  * Mechanics resolve spells (205001-205007) carry their own flat damage and are excluded by the custom id floor.
  * E4 (empowered heroics) multiplies its own damage factor on top here.
@@ -74,15 +75,9 @@ namespace DungeonDifficulties
         Heroic::SpellDifficultyIndex sSwaps;
         std::unordered_map<uint32, Heroic::PotencyRow> sPotency;     // key spellId << 2 | effect index
 
-        // The periodic heal tick's (target, caster, spell), set by ModifyPeriodicDamageAurasTick for heal spells and
-        // consumed by the ModifyHealReceived call that follows it on the same thread. Compared, never dereferenced.
-        struct PeriodicHealMarker
-        {
-            Unit const* target = nullptr;
-            Unit const* caster = nullptr;
-            SpellInfo const* spell = nullptr;
-        };
-        thread_local PeriodicHealMarker tMarker;
+        // The periodic heal tick's call, set by ModifyPeriodicDamageAurasTick for heal spells and consumed by the
+        // ModifyHealReceived call that follows it on the same thread (HeroicSpellMath.h).
+        thread_local Heroic::HealTickMarker tMarker;
 
         uint32 PotencyKey(uint32 spellId, uint8 effIndex)
         {
@@ -151,6 +146,84 @@ namespace DungeonDifficulties
         {
             return HasAuraType(info, SPELL_AURA_PERIODIC_DAMAGE) || HasAuraType(info, SPELL_AURA_PERIODIC_LEECH)
                 || HasAuraType(info, SPELL_AURA_PERIODIC_DAMAGE_PERCENT);
+        }
+
+        bool HasWeaponEffect(SpellInfo const* info, bool normalizedOnly = false)
+        {
+            for (uint8 i = 0; i < MAX_SPELL_EFFECTS; ++i)
+            {
+                switch (info->Effects[i].Effect)
+                {
+                    case SPELL_EFFECT_NORMALIZED_WEAPON_DMG:
+                        return true;
+                    case SPELL_EFFECT_WEAPON_DAMAGE:
+                    case SPELL_EFFECT_WEAPON_DAMAGE_NOSCHOOL:
+                    case SPELL_EFFECT_WEAPON_PERCENT_DAMAGE:
+                        if (!normalizedOnly)
+                            return true;
+                        break;
+                    default:
+                        break;
+                }
+            }
+            return false;
+        }
+
+        // Spell::Spell's m_attackType for the spell.
+        WeaponAttackType AttackTypeOf(SpellInfo const* info)
+        {
+            switch (info->DmgClass)
+            {
+                case SPELL_DAMAGE_CLASS_MELEE:
+                    return info->HasAttribute(SPELL_ATTR3_REQUIRES_OFF_HAND_WEAPON) ? OFF_ATTACK : BASE_ATTACK;
+                case SPELL_DAMAGE_CLASS_RANGED:
+                    return info->IsRangedWeaponSpell() ? RANGED_ATTACK : BASE_ATTACK;
+                default:
+                    return info->HasAttribute(SPELL_ATTR2_AUTO_REPEAT) ? RANGED_ATTACK : BASE_ATTACK;
+            }
+        }
+
+        // The mean weapon damage the engine rolls for a weapon spell of `info` cast by `caster`: Spell::EffectWeaponDmg
+        // -> Unit::CalculateDamage(attack, normalized, physical), which reads the unit's min / max damage fields for a
+        // plain physical hit and recomputes them (CalculateMinMaxDamage) otherwise. Weapon plus AP, DamageModifier and
+        // swing included: the per-hit damage of the current (heroic) template, not its bare base weapon.
+        double WeaponDamageOf(Unit* caster, SpellInfo const* info)
+        {
+            WeaponAttackType const attack = AttackTypeOf(info);
+            bool const normalized = HasWeaponEffect(info, true);
+            bool const physical = info->GetSchoolMask() & SPELL_SCHOOL_MASK_NORMAL;
+            float minDamage = 0.f;
+            float maxDamage = 0.f;
+            if (normalized || !physical)
+            {
+                for (uint8 i = 0; i < MAX_ITEM_PROTO_DAMAGES; ++i)
+                {
+                    float minTmp = 0.f;
+                    float maxTmp = 0.f;
+                    caster->CalculateMinMaxDamage(attack, normalized, physical, minTmp, maxTmp, i);
+                    minDamage += minTmp;
+                    maxDamage += maxTmp;
+                }
+            }
+            else
+            {
+                switch (attack)
+                {
+                    case RANGED_ATTACK:
+                        minDamage = caster->GetFloatValue(UNIT_FIELD_MINRANGEDDAMAGE);
+                        maxDamage = caster->GetFloatValue(UNIT_FIELD_MAXRANGEDDAMAGE);
+                        break;
+                    case OFF_ATTACK:
+                        minDamage = caster->GetFloatValue(UNIT_FIELD_MINOFFHANDDAMAGE);
+                        maxDamage = caster->GetFloatValue(UNIT_FIELD_MAXOFFHANDDAMAGE);
+                        break;
+                    default:
+                        minDamage = caster->GetFloatValue(UNIT_FIELD_MINDAMAGE);
+                        maxDamage = caster->GetFloatValue(UNIT_FIELD_MAXDAMAGE);
+                        break;
+                }
+            }
+            return Heroic::MeanWeaponDamage(minDamage, maxDamage);
         }
     }
 
@@ -271,14 +344,15 @@ namespace DungeonDifficulties
         sc.normalMaxLevel = std::max(normal->minlevel, normal->maxlevel);
         sc.normalBaseDamage = BaseDamageOf(unitClass, normal->expansion);
         sc.targetMaxHealth = target ? double(target->GetMaxHealth()) : 0.0;
-        WeaponAttackType const attack = spellInfo->DmgClass == SPELL_DAMAGE_CLASS_RANGED ? RANGED_ATTACK : BASE_ATTACK;
-        sc.weaponAverage = (caster->GetWeaponDamageRange(attack, MINDAMAGE)
-            + caster->GetWeaponDamageRange(attack, MAXDAMAGE)) / 2.0;
+        if (HasWeaponEffect(spellInfo) || HasWeaponEffect(sourceInfo))
+            sc.weaponAverage = WeaponDamageOf(caster, spellInfo);
 
+        // Effects only: a spell_bonus_data ap_bonus / ap_dot_bonus share (Unit::SpellDamageBonusDone adds the caster's
+        // attack power x the coefficient) is not modelled and gets F as well (HeroicSpellMath.h, "Not modelled").
         if (heal)
         {
             // Creature heals on creatures: the target's heroic / normal max health (from the templates, so auras and
-            // the current level of a creature without a heroic template give ratio 1).
+            // the current level of a creature without a heroic template give ratio 1). Uncapped (GroupFactor).
             Creature const* healed = target ? target->ToCreature() : nullptr;
             CreatureTemplate const* healedCurrent = healed ? healed->GetCreatureTemplate() : nullptr;
             CreatureTemplate const* healedNormal =
@@ -351,6 +425,7 @@ public:
 
     void ModifySpellDamageTaken(Unit* target, Unit* attacker, int32& damage, SpellInfo const* spellInfo) override
     {
+        tMarker.Clear();
         if (!target || !spellInfo)
             return;
         Apply(attacker, target, damage, spellInfo, Heroic::Group::DirectDamage);
@@ -359,13 +434,14 @@ public:
     void ModifyPeriodicDamageAurasTick(Unit* target, Unit* attacker, uint32& damage, SpellInfo const* spellInfo)
         override
     {
+        tMarker.Clear();
         if (!target || !spellInfo)
             return;
         if (IsPeriodicHealSpell(spellInfo))
         {
             // Possibly the periodic heal tick (SpellAuraEffects.cpp HandlePeriodicHealAurasTick), whose
-            // ModifyHealReceived call follows with the same (target, caster, spell).
-            tMarker = { target, attacker, spellInfo };
+            // ModifyHealReceived call follows with the same (target, caster, spell) and the same amount variable.
+            tMarker.Mark(target, attacker, spellInfo, &damage);
             if (!IsPeriodicDamageSpell(spellInfo))
                 return;
         }
@@ -374,11 +450,9 @@ public:
 
     void ModifyHealReceived(Unit* first, Unit* second, uint32& heal, SpellInfo const* spellInfo) override
     {
-        PeriodicHealMarker const marker = tMarker;
-        tMarker = {};
+        bool const periodic = tMarker.Consume(first, second, spellInfo, &heal);
         if (!first || !second || !spellInfo)
             return;
-        bool const periodic = marker.spell == spellInfo && marker.target == first && marker.caster == second;
         Unit* healer = periodic ? second : first;
         Unit* target = periodic ? first : second;
         Apply(healer, target, heal, spellInfo, periodic ? Heroic::Group::PeriodicHeal : Heroic::Group::DirectHeal);
