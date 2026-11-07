@@ -19,10 +19,11 @@ DungeonDifficulties.Enable = 1
 #        Description: Map ids (spaces or commas) whose heroic difficulty the rule acts on. Add a dungeon once its
 #                     heroic templates exist (dbc-tools heroic declarations); normal difficulty is never touched.
 #        Example:     "36 33"
-#        Default:     "36" - Deadmines
+#        Default:     "36" - Deadmines (the code's fallback for a missing or malformed value)
+#                     This file ships "36 33": Deadmines and Shadowfang Keep.
 #
 
-DungeonDifficulties.Heroic.Maps = "36"
+DungeonDifficulties.Heroic.Maps = "36 33"
 
 #
 #    DungeonDifficulties.ReferenceHealth
