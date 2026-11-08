@@ -93,7 +93,7 @@ then rescaled against the lower rank: 15232 (from 12471), 15305 (15659), 15472 (
 | Key | Default | What |
 | --- | --- | --- |
 | `DungeonDifficulties.Enable` | `1` | the hook |
-| `DungeonDifficulties.Heroic.Maps` | `36` (conf dist: `36 33`) | maps whose heroic the rule acts on |
+| `DungeonDifficulties.Heroic.Maps` | `36` (conf dist: `36 33 289`) | maps whose heroic the rule acts on |
 | `DungeonDifficulties.ReferenceHealth` | `20:1300:1290 60:3670:3710 60h:4120:4110` | = BM's `ReferenceHealth.Rows` |
 | `DungeonDifficulties.Heroic.SpellExceptions` | empty | stock spell ids left unscaled (cast or source id) |
 | `DungeonDifficulties.Heroic.RequireHeroicTemplate` | `1` | scale only casters with a heroic template |
