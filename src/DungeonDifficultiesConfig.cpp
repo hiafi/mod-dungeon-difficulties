@@ -1,6 +1,6 @@
 /*
  * mod-dungeon-difficulties: configuration (conf/mod_dungeon_difficulties.conf.dist). Read at startup and on
- * `.reload config`; the hooks read the cached values only.
+ * `.reload config`; the hooks read the cached values only. Flex keys: DungeonDifficulties.Flex.* (FlexScale.h).
  */
 
 #include "Config.h"
@@ -12,6 +12,46 @@ namespace DungeonDifficulties
     namespace
     {
         ModuleConfig sConfig;
+
+        void LoadFlexConfig(FlexConfig& f)
+        {
+            std::string err;
+            f.enabled = sConfigMgr->GetOption<bool>("DungeonDifficulties.Flex.Enable", true);
+            f.debug = sConfigMgr->GetOption<bool>("DungeonDifficulties.Flex.Debug", false);
+
+            f.mapsText = sConfigMgr->GetOption<std::string>("DungeonDifficulties.Flex.Maps", kDefaultFlexMaps);
+            if (!Heroic::ParseIdList(f.mapsText, f.maps, err))
+            {
+                LOG_WARN(kLog, "DungeonDifficulties.Flex.Maps '{}' is malformed: {}; no flex map", f.mapsText, err);
+                f.mapsText = kDefaultFlexMaps;
+                f.maps.clear();
+            }
+
+            int32 const minPlayers = sConfigMgr->GetOption<int32>("DungeonDifficulties.Flex.MinPlayers",
+                FlexMath::kDefaultMinPlayers);
+            int32 const maxPlayers = sConfigMgr->GetOption<int32>("DungeonDifficulties.Flex.MaxPlayers",
+                FlexMath::kDefaultMaxPlayers);
+            float const step = sConfigMgr->GetOption<float>("DungeonDifficulties.Flex.HealthStep",
+                float(FlexMath::kDefaultHealthStep));
+            if (!FlexMath::ValidateSettings(minPlayers, maxPlayers, step, f.settings, err))
+                LOG_WARN(kLog, "DungeonDifficulties.Flex: {}; using MinPlayers {}, MaxPlayers {}, HealthStep {}", err,
+                    FlexMath::kDefaultMinPlayers, FlexMath::kDefaultMaxPlayers, FlexMath::kDefaultHealthStep);
+
+            // AutoBalance would stack its own health (and damage) scaling on a flex map. Its keys are read the way
+            // mod-autobalance reads them (Enable.Global falls back to the old AutoBalance.enable, default on;
+            // PerInstance comma separated); no check when AutoBalance is not loaded (no AutoBalance.* key) or is off.
+            bool const autoBalanceLoaded = !sConfigMgr->GetKeysByString("AutoBalance.").empty();
+            bool const autoBalanceOn = autoBalanceLoaded && sConfigMgr->GetOption<bool>("AutoBalance.Enable.Global",
+                sConfigMgr->GetOption<bool>("AutoBalance.enable", true, false), false);
+            if (f.enabled && !f.maps.empty() && autoBalanceOn)
+            {
+                std::set<uint32> const disabled = FlexMath::ParseAutoBalanceDisabled(
+                    sConfigMgr->GetOption<std::string>("AutoBalance.Disable.PerInstance", "", false));
+                for (uint32 map : FlexMath::FlexMapsStillAutoBalanced(f.maps, disabled))
+                    LOG_WARN(kLog, "DungeonDifficulties.Flex.Maps has map {} but AutoBalance still scales it: add {} "
+                        "to AutoBalance.Disable.PerInstance (comma separated)", map, map);
+            }
+        }
     }
 
     ModuleConfig const& GetConfig()
@@ -60,6 +100,8 @@ namespace DungeonDifficulties
             LOG_WARN(kLog, "DungeonDifficulties.ReferenceHealth has no heroic (h) row: heroic spells scale by the "
                 "normal rows' level ratio only");
 
+        LoadFlexConfig(c.flex);
+
         sConfig = std::move(c);
 
         LOG_INFO(kLog, "mod-dungeon-difficulties {}: heroic maps '{}', reference health '{}', spell exceptions '{}', "
@@ -68,5 +110,9 @@ namespace DungeonDifficulties
             RefHealth::Format(sConfig.referenceHealth), Heroic::FormatIdList(sConfig.heroic.exceptions),
             sConfig.heroic.requireHeroicTemplate ? "on" : "off",
             sConfig.heroic.enabled ? "" : " (DISABLED)");
+        FlexConfig const& f = sConfig.flex;
+        LOG_INFO(kLog, "mod-dungeon-difficulties flex: maps '{}', players {}-{}, health step {:.2f}{}",
+            Heroic::FormatIdList(f.maps), f.settings.minPlayers, f.settings.maxPlayers, f.settings.healthStep,
+            f.enabled ? "" : " (DISABLED)");
     }
 }
