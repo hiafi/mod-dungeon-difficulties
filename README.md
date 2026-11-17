@@ -4,10 +4,12 @@ Dungeon difficulties for AzerothCore (WotLK 3.3.5a) on this server: vanilla dung
 (stage E4) empowered heroic levels. Design: `.agents/plans/dungeon-difficulties/` in the core repository (PLAN,
 STAGE-E0-E3-HANDOFF §3.6, the WP-H report).
 
-Status: stage E2, the heroic creature spell scaling hook. Not yet built or playtested.
+Status: stage E2, the heroic creature spell scaling hook (live). The flex 5-10 scaler (Blackrock Spire build,
+handoff §3.12): written and host-tested, not yet built or playtested.
 
-No core edits: existing `UnitScript` hooks only. Heroic templates, MapDifficulty rows and spawn masks come from
-dbc-tools; this module only scales the stock spells those creatures cast.
+No core edits: existing `UnitScript` / `AllCreatureScript` hooks only. Heroic templates, MapDifficulty rows and spawn
+masks come from dbc-tools; this module scales the stock spells those creatures cast and, on flex maps, creature health
+by the player count held at each pull.
 
 ## Layout
 
@@ -17,7 +19,10 @@ dbc-tools; this module only scales the stock spells those creatures cast.
 | `src/ReferenceHealth.h` | Pure keyed reference health rows (copied from mod-boss-mechanics) |
 | `src/HeroicSpellScaling.cpp` | `UnitScript` hooks, engine inputs, startup data (SpellDifficulty, potency rows) |
 | `src/DungeonDifficultiesConfig.cpp` | Config load (startup and `.reload config`) |
-| `src/DungeonDifficultiesCommand.cpp` | `.dd status`, `.dd factor` |
+| `src/FlexMath.h` | Pure flex rules: clamp, ladder, target counts, loot rolls, tank swap, count sources, hold state |
+| `src/FlexScale.h` | Flex API for boss scripts (other modules include it by name) |
+| `src/FlexScale.cpp` | Flex engine side: pull, evade, death, removal and update hooks, holds, `.dd flex` views |
+| `src/DungeonDifficultiesCommand.cpp` | `.dd status`, `.dd factor`, `.dd flex` |
 | `tests/` | Host tests: `bash tests/run.sh` (`CXX=clang++` for clang) |
 
 ## The rule
@@ -93,11 +98,96 @@ then rescaled against the lower rank: 15232 (from 12471), 15305 (15659), 15472 (
 | Key | Default | What |
 | --- | --- | --- |
 | `DungeonDifficulties.Enable` | `1` | the hook |
-| `DungeonDifficulties.Heroic.Maps` | `36` (conf dist: `36 33 289 329`) | maps whose heroic the rule acts on |
+| `DungeonDifficulties.Heroic.Maps` | `36` (conf dist: `36 33 289 329 229`) | maps whose heroic the rule acts on |
 | `DungeonDifficulties.ReferenceHealth` | `20:1300:1290 60:3670:3710 60h:4120:4110` | = BM's `ReferenceHealth.Rows` |
 | `DungeonDifficulties.Heroic.SpellExceptions` | empty | stock spell ids left unscaled (cast or source id) |
 | `DungeonDifficulties.Heroic.RequireHeroicTemplate` | `1` | scale only casters with a heroic template |
 | `DungeonDifficulties.Debug` | `0` | log every scaled hit |
+| `DungeonDifficulties.Flex.Enable` | `1` | the flex scaler |
+| `DungeonDifficulties.Flex.Maps` | empty (conf dist: `229`) | flex maps, every difficulty |
+| `DungeonDifficulties.Flex.MinPlayers` / `MaxPlayers` | `5` / `10` | the clamp on the counted players |
+| `DungeonDifficulties.Flex.HealthStep` | `0.25` | health per player above 5 |
+| `DungeonDifficulties.Flex.Debug` | `0` | log every hold and release (boss pulls are always logged) |
+
+## Flex scaler
+
+A flex dungeon (Blackrock Spire, map 229; spec rulings 6-14 and 20, shared doc section 3 "Flex dungeons") takes 5 to 10
+players on every difficulty. AutoBalance must be off for the map (`AutoBalance.Disable.PerInstance`, comma separated,
+in the live `AutoBalance.conf`; the module warns at startup when a flex map is missing there). AutoBalance stays for
+everything else until raids move to this scaler.
+
+| Rule | Value |
+| --- | --- |
+| Count | players on the map at the pull, game masters excluded, bots included, pets never; clamped to 5-10 |
+| Health | base x (1 + 0.25 x (N - 5)): 1.00, 1.25, 1.50, 1.75, 2.00, 2.25 |
+| Damage | never scales (DD's heroic spell factor and BM's reference health pins are untouched) |
+| Targets | the normal count at 5, the doubled count at 6 or more |
+| Loot | max(1, N / 5): 1, or 2 at 10 |
+| Taunt swap | only at 10 |
+
+**Who is held.** Every hostile creature on a flex map, at its own pull: trash, stock bosses, reworked bosses and their
+adds. Hostile = its faction is hostile to players, or it engaged a player or something a player controls (a neutral
+beast pulled by a player). Pets, guardians, charmed units, triggers, critters and friendly NPCs fighting mobs are not.
+
+**Which count.** First match wins:
+
+1. a summon whose summoner is held takes the summoner's count (an engaged summoner not yet held is held first);
+2. while a held dungeon boss (`IsDungeonBoss`, or a world boss) is engaged, every pull takes that encounter's count
+   (a second boss of the encounter, adds placed in advance, trash that joins);
+3. the GM override (`.dd flex set <n>`) of the instance;
+4. a fresh count of the players.
+
+A player joining mid-fight changes nothing until the next pull.
+
+**Hold, reset, no stacking.** A hold stores the count and the creature's base (5-player) max health in the creature's
+`CustomData` and sets create health and `UNIT_MOD_HEALTH` `BASE_VALUE` to base x ladder (max health follows through
+`UpdateMaxHealth`, so health auras stay one multiplication), keeping the health percent. The base is the create health
+(template, heroic template, `UpdateEntry`, or a script's `SetCreateHealth`), or the max health when a script wrote that
+field alone (the kit's `SummonWave` health). Evade (`OnUnitEnterEvadeMode`, after `Reset`) restores the base and drops
+the hold; death (`OnUnitDeath`, after `JustDied`) and removal from the world drop it too. A hold still there at the
+next pull (a script evade path that skips the core's) is released first, and a creature still carrying the value the
+scaler wrote resolves to its stored base, so health is never base x ladder x ladder. An `UpdateEntry` while held
+and engaged rescales the new template health by the held count; a respawn or an idle `UpdateEntry` drops the hold.
+
+**Staying scaled for the fight.** mod-autobalance resets max health (`SetMaxHealth(template)`, percent kept) on every
+dungeon map, its disabled ones included, when a player levels inside or on `.reload config`. The flex
+`OnAllCreatureUpdate` hook (flex maps, held creatures only) sees max health no longer matching the create health the
+scaler wrote and puts the scaled value back in the same update, percent kept. The same hook releases a hold left on
+an idle creature (alive, not engaged, not evading, not charmed).
+
+**Hook order** (verified in `Creature::AtEngage`): the AI's `JustEngagedWith` runs first, then
+`UnitScript::OnUnitEnterCombat`. Both go through `PullCount`, which holds at the first caller, so a boss script that
+reads the count in `JustEngagedWith` and the hook that follows hold the same number and scale health once.
+
+**Loot timing** (verified in `Unit::Kill`): the corpse loot is filled before `JustDied`, with the creature's
+`LootMode`. A flex loot bit must be set at the pull (after `PullCount`), not in `JustDied`.
+
+### API for boss scripts (`src/FlexScale.h`)
+
+```cpp
+#include "FlexScale.h"
+namespace DungeonDifficulties::Flex
+{
+    bool IsFlexMap(Map const* map);
+    uint8 HeldCount(Creature const* creature);              // 0 = not held
+    uint8 PullCount(Creature* creature);                    // holds at the first caller once engaged
+    uint32 BaseHealth(Creature const* creature);            // the stored 5-player base, 0 = never held or set
+    void SetScaledMaxHealth(Creature* creature, uint32 base); // script-set health, base = the 5-player value
+    uint8 ClampCount(uint32 players);
+    float HealthLadder(uint8 count);
+    uint8 TargetCount(uint8 count, uint8 normal, uint8 big);
+    uint8 LootRolls(uint8 count);
+    bool TankSwap(uint8 count);
+}
+```
+
+- Call `PullCount(me)` in `JustEngagedWith` (or later) and keep the result for the fight; `HeldCount(me)` reads it
+  again (still valid in `JustDied`: the hook drops the hold after it).
+- Set health only through `SetScaledMaxHealth` on a flex map (hard modes, late arrivals, summoned bosses). Held, it
+  applies base x ladder at once; not held, it sets the base and the next pull scales it. It keeps the health percent.
+- Off a flex map everything degrades to the 5-player fight: `PullCount` returns 5, `HeldCount` 0, the helpers read 0
+  as 5, `SetScaledMaxHealth` sets the base unscaled.
+- mod-dungeon-bosses wraps this as `DungeonKit::Flex` (KT-B1); its scripts call the kit, not this header.
 
 ## Commands (GM)
 
@@ -105,13 +195,27 @@ then rescaled against the lower rank: 15232 (from 12471), 15305 (15659), 15472 (
 - `.dd factor <spell>`: select a creature; prints the gate verdict where it stands, the SpellDifficulty source, its
   normal levels, `Fref`, and F per hook group (damage against you, heals on the creature). Off a listed heroic map it
   still computes F as a preview.
+- `.dd flex`: the flex config; on a flex map the players, the count a fresh pull holds and its rules, the GM override,
+  the live encounter and every held creature (count, max and base health). With a creature selected, its hold (count,
+  source, time held, base x ladder, the target, loot and tank swap rules at its count) or the count a pull would hold
+  now. Read only.
+- `.dd flex set <n>`: test override for this instance (0 clears): pulls with nothing to inherit hold `n`, clamped.
+  It lives with the instance, so an instance reset clears it; fights already held keep their count.
 
 ## Tests
 
-`bash tests/run.sh` and `CXX=clang++ bash tests/run.sh` build `tests/heroic_spell_test.cpp` against the pure headers:
-every Deadmines spell category of the handoff (Shoot, Fireball, Flamestrike, Rupture, Molten Metal, Acid Splash, Frost
-Nova stock and live, Fire Blast, Rhahk'Zor Slam, Poisoned Harpoon, Axe Toss, Cleave), mixed effects, heals, the
-SpellDifficulty index and the Lightning Bolt and Arcing Smash swaps, the gate and config parsing.
+`bash tests/run.sh` and `CXX=clang++ bash tests/run.sh` build the host tests against the pure headers:
+
+- `tests/heroic_spell_test.cpp`: every Deadmines spell category of the handoff (Shoot, Fireball, Flamestrike,
+  Rupture, Molten Metal, Acid Splash, Frost Nova stock and live, Fire Blast, Rhahk'Zor Slam, Poisoned Harpoon, Axe
+  Toss, Cleave), mixed effects, heals, the SpellDifficulty index and the Lightning Bolt and Arcing Smash swaps, the
+  gate and config parsing.
+- `tests/flex_scale_test.cpp`: the ladder 1.00-2.25, the clamp below 5 and above 10, target counts at 5, 6 and 10,
+  loot rolls, the tank swap only at 10, settings validation, the gate, count precedence (summoner, encounter,
+  override, players), the encounter's owners, pull / evade / pull without stacking, a missed evade, both hook orders
+  with a player joining between, script-set health (held, not held, max-only, changed mid-fight), health auras,
+  `UpdateEntry` while held, death, adds and trash taking the encounter's count, the AutoBalance key parse, the
+  re-assert after an AutoBalance max health reset, and the idle-hold / respawn release.
 
 ## E4 seam
 

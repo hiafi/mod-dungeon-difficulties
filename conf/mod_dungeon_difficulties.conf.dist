@@ -18,13 +18,13 @@ DungeonDifficulties.Enable = 1
 #    DungeonDifficulties.Heroic.Maps
 #        Description: Map ids (spaces or commas) whose heroic difficulty the rule acts on. Add a dungeon once its
 #                     heroic templates exist (dbc-tools heroic declarations); normal difficulty is never touched.
-#        Example:     "36 33 289 329"
+#        Example:     "36 33 289 329 229"
 #        Default:     "36" - Deadmines (the code's fallback for a missing or malformed value)
-#                     This file ships "36 33 289 329": Deadmines, Shadowfang Keep, Scholomance and
-#                     Stratholme.
+#                     This file ships "36 33 289 329 229": Deadmines, Shadowfang Keep, Scholomance,
+#                     Stratholme and Blackrock Spire (a 10-player heroic row; Flex.Maps below scales it).
 #
 
-DungeonDifficulties.Heroic.Maps = "36 33 289 329"
+DungeonDifficulties.Heroic.Maps = "36 33 289 329 229"
 
 #
 #    DungeonDifficulties.ReferenceHealth
@@ -71,3 +71,67 @@ DungeonDifficulties.Heroic.RequireHeroicTemplate = 1
 #
 
 DungeonDifficulties.Debug = 0
+
+########################################
+# mod-dungeon-difficulties: the flex 5-10 scaler (Blackrock Spire build, spec rulings 6-14 and 20)
+########################################
+#
+#    DungeonDifficulties.Flex.Enable
+#        Description: Hold a player count at each pull on the maps in DungeonDifficulties.Flex.Maps and scale the
+#                     pulled creature's max health by the ladder (see the README, "Flex scaler"). Every hostile
+#                     creature (trash, bosses, adds) is held at its own pull; evade restores its base health. Damage
+#                     never scales. Boss scripts read the held count for target counts, loot and taunt swaps.
+#        Default:     1 - Enabled
+#                     0 - Disabled (no holds; the API returns the 5-player values)
+#
+
+DungeonDifficulties.Flex.Enable = 1
+
+#
+#    DungeonDifficulties.Flex.Maps
+#        Description: Map ids (spaces or commas) that are flex dungeons, every difficulty. Each one must also be off
+#                     AutoBalance: AutoBalance.Disable.PerInstance (comma separated) in AutoBalance.conf, or both
+#                     scalers stack (the module logs a warning at startup when one is missing).
+#        Example:     "229"
+#        Default:     "" - none (the code's fallback for a missing or malformed value)
+#                     This file ships "229": Lower and Upper Blackrock Spire.
+#
+
+DungeonDifficulties.Flex.Maps = "229"
+
+#
+#    DungeonDifficulties.Flex.MinPlayers
+#    DungeonDifficulties.Flex.MaxPlayers
+#        Description: The clamp on the counted players, for health, target counts and loot: fewer play the
+#                     MinPlayers fight, more play the MaxPlayers fight. 1-40, MinPlayers <= MaxPlayers; otherwise
+#                     a warning and the defaults. The rules keep their own break points (targets double at 6, loot
+#                     one item per 5, tank swaps at 10).
+#                     mod-dungeon-bosses' boss rules (target counts, loot rolls, taunt swaps) clamp the held count
+#                     to 5-10 themselves (its kit_flex_parity_test pins these defaults): with other values here,
+#                     health follows this clamp but the bosses' mechanics still play 5-10. Change them for a test
+#                     only.
+#        Default:     5, 10
+#
+
+DungeonDifficulties.Flex.MinPlayers = 5
+DungeonDifficulties.Flex.MaxPlayers = 10
+
+#
+#    DungeonDifficulties.Flex.HealthStep
+#        Description: Health multiplier per player above 5: max health = base x (1 + step x (count - 5)), so 0.25
+#                     gives 1.00, 1.25, 1.50, 1.75, 2.00 and 2.25 for 5 to 10 players. 0-2. mod-dungeon-bosses'
+#                     kit assumes 0.25 for its own health previews (see MinPlayers above).
+#        Default:     0.25
+#
+
+DungeonDifficulties.Flex.HealthStep = 0.25
+
+#
+#    DungeonDifficulties.Flex.Debug
+#        Description: Log every hold and release (trash included) to module.dungeondifficulties. Boss pulls are
+#                     always logged (count, its source, players, health before and after).
+#        Default:     0 - Disabled
+#                     1 - Enabled
+#
+
+DungeonDifficulties.Flex.Debug = 0
