@@ -93,12 +93,17 @@ read as a swap. Six of them are also cast as themselves by vanilla creatures (th
 then rescaled against the lower rank: 15232 (from 12471), 15305 (15659), 15472 (12739), 15530 (15043), 15582 (15657),
 15616 (15039). None is in Deadmines; settle them per dungeon when one of their maps gets a heroic.
 
+Blackrock Depths (230) casts five of them as themselves: Hate'rel and Dark Keeper Uggel 15232, Golem Lord Argelmach
+15305, Anub'shiah 15472, Pyromancer Loregrain 15616 and Dope'rel 15582; its reworked bosses use copies in their own
+spell slice instead (trash keeps the stock ids), and its swap casters (the Shadowforge Senator 12471, Plugger 12739,
+the Twilight Emissary 15043) take the heroic version.
+
 ## Config
 
 | Key | Default | What |
 | --- | --- | --- |
 | `DungeonDifficulties.Enable` | `1` | the hook |
-| `DungeonDifficulties.Heroic.Maps` | `36` (conf dist: `36 33 289 329 229`) | maps whose heroic the rule acts on |
+| `DungeonDifficulties.Heroic.Maps` | `36` (conf dist: `36 33 289 329 229 230`) | maps whose heroic the rule acts on |
 | `DungeonDifficulties.ReferenceHealth` | `20:1300:1290 60:3670:3710 60h:4120:4110` | = BM's `ReferenceHealth.Rows` |
 | `DungeonDifficulties.Heroic.SpellExceptions` | empty | stock spell ids left unscaled (cast or source id) |
 | `DungeonDifficulties.Heroic.RequireHeroicTemplate` | `1` | scale only casters with a heroic template |

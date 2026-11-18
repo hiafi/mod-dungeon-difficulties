@@ -18,13 +18,14 @@ DungeonDifficulties.Enable = 1
 #    DungeonDifficulties.Heroic.Maps
 #        Description: Map ids (spaces or commas) whose heroic difficulty the rule acts on. Add a dungeon once its
 #                     heroic templates exist (dbc-tools heroic declarations); normal difficulty is never touched.
-#        Example:     "36 33 289 329 229"
+#        Example:     "36 33 289 329 229 230"
 #        Default:     "36" - Deadmines (the code's fallback for a missing or malformed value)
-#                     This file ships "36 33 289 329 229": Deadmines, Shadowfang Keep, Scholomance,
-#                     Stratholme and Blackrock Spire (a 10-player heroic row; Flex.Maps below scales it).
+#                     This file ships "36 33 289 329 229 230": Deadmines, Shadowfang Keep, Scholomance,
+#                     Stratholme, Blackrock Spire (a 10-player heroic row; Flex.Maps below scales it) and
+#                     Blackrock Depths (a 5-player heroic row, not flex).
 #
 
-DungeonDifficulties.Heroic.Maps = "36 33 289 329 229"
+DungeonDifficulties.Heroic.Maps = "36 33 289 329 229 230"
 
 #
 #    DungeonDifficulties.ReferenceHealth
