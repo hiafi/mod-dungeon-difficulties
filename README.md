@@ -98,12 +98,17 @@ Blackrock Depths (230) casts five of them as themselves: Hate'rel and Dark Keepe
 spell slice instead (trash keeps the stock ids), and its swap casters (the Shadowforge Senator 12471, Plugger 12739,
 the Twilight Emissary 15043) take the heroic version.
 
+Scarlet Monastery (189, a 5-player heroic row, not flex) is in the conf dist's list. No creature spawned on the map
+casts one of the six double-use ids or their normal-side swap sources through a SmartAI cast action or
+`creature_template_spell` (read-only SELECTs 2026-11-20; action lists and C++ casts not read); its reworked bosses use
+spells of their own slice (212300-213499).
+
 ## Config
 
 | Key | Default | What |
 | --- | --- | --- |
 | `DungeonDifficulties.Enable` | `1` | the hook |
-| `DungeonDifficulties.Heroic.Maps` | `36` (conf dist: `36 33 289 329 229 230`) | maps whose heroic the rule acts on |
+| `DungeonDifficulties.Heroic.Maps` | `36` (conf dist: `36 33 289 329 229 230 189`) | maps the heroic rule acts on |
 | `DungeonDifficulties.ReferenceHealth` | `20:1300:1290 60:3670:3710 60h:4120:4110` | = BM's `ReferenceHealth.Rows` |
 | `DungeonDifficulties.Heroic.SpellExceptions` | empty | stock spell ids left unscaled (cast or source id) |
 | `DungeonDifficulties.Heroic.RequireHeroicTemplate` | `1` | scale only casters with a heroic template |

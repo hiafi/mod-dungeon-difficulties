@@ -105,6 +105,24 @@ namespace
         CHECK_NEAR(ReferenceRatio(normalOnly, 60, 20), 3670.0 / 1300.0, 1e-9);   // no heroic row: normal by level
     }
 
+    // The rows the conf dist ships (BossMechanics.ReferenceHealth.Rows, Scarlet Monastery build): a measured normal
+    // row is its own denominator, levels between two rows interpolate between them, the 20 / 60 rows do not move.
+    void TestShippedRows()
+    {
+        RefHealth::Table t;
+        std::string err;
+        CHECK(RefHealth::ParseTable("20:1300:1290 35:2038:2072 40:2278:2307 52:3032:3126 53:3182:3266 55:3362:3629 "
+            "56:3456:3727 60:3670:3710 60h:4120:4110", t, err));
+        CHECK_NEAR(ReferenceRatio(t, 60, 35), 4120.0 / 2038.0, 1e-9);
+        CHECK_NEAR(ReferenceRatio(t, 60, 40), 4120.0 / 2278.0, 1e-9);
+        CHECK_NEAR(ReferenceRatio(t, 60, 52), 4120.0 / 3032.0, 1e-9);
+        CHECK_NEAR(ReferenceRatio(t, 60, 20), kFref, 1e-9);
+        CHECK_NEAR(ReferenceRatio(t, 60, 60), 4120.0 / 3670.0, 1e-9);
+        CHECK_NEAR(ReferenceRatio(t, 60, 37), 4120.0 / (2038.0 + 2.0 / 5.0 * (2278.0 - 2038.0)), 1e-9);
+        // stronger than the 20-60 line at 35 (2,189 there): SM heroic stock spells about 7% up
+        CHECK(ReferenceRatio(t, 60, 35) > ReferenceRatio(Rows(), 60, 35) * 1.07);
+    }
+
     void TestMeanEffectValue()
     {
         // Die mean (1 + sides) / 2; 1 side adds 1, 0 sides nothing.
@@ -579,6 +597,7 @@ namespace
 int main()
 {
     TestReferenceRatio();
+    TestShippedRows();
     TestMeanEffectValue();
     TestDeadminesCategories();
     TestMixedEffects();
