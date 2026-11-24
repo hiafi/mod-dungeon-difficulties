@@ -18,14 +18,14 @@ DungeonDifficulties.Enable = 1
 #    DungeonDifficulties.Heroic.Maps
 #        Description: Map ids (spaces or commas) whose heroic difficulty the rule acts on. Add a dungeon once its
 #                     heroic templates exist (dbc-tools heroic declarations); normal difficulty is never touched.
-#        Example:     "36 33 289 329 229 230"
+#        Example:     "36 33 289 329 229 230 189"
 #        Default:     "36" - Deadmines (the code's fallback for a missing or malformed value)
-#                     This file ships "36 33 289 329 229 230": Deadmines, Shadowfang Keep, Scholomance,
-#                     Stratholme, Blackrock Spire (a 10-player heroic row; Flex.Maps below scales it) and
-#                     Blackrock Depths (a 5-player heroic row, not flex).
+#                     This file ships "36 33 289 329 229 230 189": Deadmines, Shadowfang Keep, Scholomance,
+#                     Stratholme, Blackrock Spire (a 10-player heroic row; Flex.Maps below scales it), Blackrock
+#                     Depths and Scarlet Monastery (5-player heroic rows, not flex).
 #
 
-DungeonDifficulties.Heroic.Maps = "36 33 289 329 229 230"
+DungeonDifficulties.Heroic.Maps = "36 33 289 329 229 230 189"
 
 #
 #    DungeonDifficulties.ReferenceHealth
@@ -35,9 +35,12 @@ DungeonDifficulties.Heroic.Maps = "36 33 289 329 229 230"
 #                     caster's normal level. Without an "h" row heroic reads the normal rows by level. A malformed
 #                     value logs a warning and uses the default.
 #        Default:     "20:1300:1290 60:3670:3710 60h:4120:4110" - the E3 measurement (2026-11-05)
+#                     This file ships BossMechanics.ReferenceHealth.Rows as of the Scarlet Monastery build (the REF
+#                     rows 35 / 40 and the Blackrock Depths rows 52-56): a heroic stock spell of a level 35-40 caster
+#                     reads its own normal row instead of the 20-60 line (about 7-8% under at 35 / 40).
 #
 
-DungeonDifficulties.ReferenceHealth = "20:1300:1290 60:3670:3710 60h:4120:4110"
+DungeonDifficulties.ReferenceHealth = "20:1300:1290 35:2038:2072 40:2278:2307 52:3032:3126 53:3182:3266 55:3362:3629 56:3456:3727 60:3670:3710 60h:4120:4110"
 
 #
 #    DungeonDifficulties.Heroic.SpellExceptions
