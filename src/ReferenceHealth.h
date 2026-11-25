@@ -2,10 +2,11 @@
  * mod-dungeon-difficulties: keyed reference health rows (pure, no AzerothCore includes).
  *
  * Copied from mod-boss-mechanics (src/MechanicRefHealth.h and the ReferenceHealthRow/InterpolateReferenceHealth part
- * of src/MechanicMath.h, WP-3P, hiafi/mod-boss-mechanics#6) so both modules read the same string without linking:
- * paste the same value into BossMechanics.ReferenceHealth.Rows and DungeonDifficulties.ReferenceHealth. Keep the two
- * copies in step when the format changes. Only the parse and lookup are copied (no map level pins: the heroic hook
- * keys on the caster's level).
+ * of src/MechanicMath.h, WP-3P, hiafi/mod-boss-mechanics#6) so both modules read the same format without linking:
+ * DungeonDifficulties.ReferenceHealth takes the rows of BossMechanics.ReferenceHealth.Rows without row 16 (it would
+ * move Deadmines' level 17 to 19 heroic stock spells; the conf dist says the same). Keep the two copies in step when
+ * the format changes. Only the parse and lookup are copied (no map level pins: the heroic hook keys on the caster's
+ * level).
  *
  * Format: entries "<level>[tier]:<nonTank>:<tank>" separated by spaces, commas, semicolons or tabs. The tier suffix is
  * none (normal), `h` (heroic) or `e<N>` (empowered level N, 1-255), any case. At least one normal row; a key repeated

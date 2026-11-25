@@ -20,7 +20,7 @@ class Unit;
 namespace DungeonDifficulties
 {
     constexpr char const* kLog = "module.dungeondifficulties";
-    // The E3 measurement (2026-11-05), the same string as BossMechanics.ReferenceHealth.Rows.
+    // The E3 measurement (2026-11-05), the same string as BossMechanics' code default for ReferenceHealth.Rows.
     constexpr char const* kDefaultReferenceHealthRows = "20:1300:1290 60:3670:3710 60h:4120:4110";
     constexpr char const* kDefaultHeroicMaps = "36";
     // No flex map unless configured: a flex map must also leave AutoBalance (AutoBalance.Disable.PerInstance), so the

@@ -103,13 +103,22 @@ casts one of the six double-use ids or their normal-side swap sources through a 
 `creature_template_spell` (read-only SELECTs 2026-11-20; action lists and C++ casts not read); its reworked bosses use
 spells of their own slice (212300-213499).
 
+Ragefire Chasm (389, a 5-player heroic row, not flex) is in the conf dist's list. No creature spawned on the map (or
+summoned by it: Voidwalker Minion 8996) casts one of the six double-use ids or their normal-side swap sources, and none
+of its stock casts (2818, 8242, 9532, 11970, 11976, 11986, 12746, 14873, 18070, 18072, 18266, 18267, 20791, 20800,
+33914, 40505) has a `spelldifficulty_dbc` row (read-only SELECTs 2026-11-24; action lists and C++ casts not read); its
+reworked bosses use spells of their own slice (213540-213799). Its level 13 to 16 casters read the level 20 row of
+`ReferenceHealth` here (the lookup clamps below the first row), so a stock heroic spell lands about 15% lighter than
+its normal share: BM's own ReferenceHealth has the level 16 row (`16:1100:1080`), this one deliberately does not (a row
+at 16 would also move the level 17 to 19 stock heroic spells of Deadmines).
+
 ## Config
 
 | Key | Default | What |
 | --- | --- | --- |
 | `DungeonDifficulties.Enable` | `1` | the hook |
-| `DungeonDifficulties.Heroic.Maps` | `36` (conf dist: `36 33 289 329 229 230 189`) | maps the heroic rule acts on |
-| `DungeonDifficulties.ReferenceHealth` | `20:1300:1290 60:3670:3710 60h:4120:4110` | = BM's `ReferenceHealth.Rows` |
+| `DungeonDifficulties.Heroic.Maps` | `36` (conf dist: `36 33 289 329 229 230 189 389`) | maps the heroic rule acts on |
+| `DungeonDifficulties.ReferenceHealth` | `20:1300:1290 60:3670:3710 60h:4120:4110` | BM's `ReferenceHealth.Rows` without row 16 |
 | `DungeonDifficulties.Heroic.SpellExceptions` | empty | stock spell ids left unscaled (cast or source id) |
 | `DungeonDifficulties.Heroic.RequireHeroicTemplate` | `1` | scale only casters with a heroic template |
 | `DungeonDifficulties.Debug` | `0` | log every scaled hit |

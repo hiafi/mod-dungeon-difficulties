@@ -18,24 +18,25 @@ DungeonDifficulties.Enable = 1
 #    DungeonDifficulties.Heroic.Maps
 #        Description: Map ids (spaces or commas) whose heroic difficulty the rule acts on. Add a dungeon once its
 #                     heroic templates exist (dbc-tools heroic declarations); normal difficulty is never touched.
-#        Example:     "36 33 289 329 229 230 189"
+#        Example:     "36 33 289 329 229 230 189 389"
 #        Default:     "36" - Deadmines (the code's fallback for a missing or malformed value)
-#                     This file ships "36 33 289 329 229 230 189": Deadmines, Shadowfang Keep, Scholomance,
+#                     This file ships "36 33 289 329 229 230 189 389": Deadmines, Shadowfang Keep, Scholomance,
 #                     Stratholme, Blackrock Spire (a 10-player heroic row; Flex.Maps below scales it), Blackrock
-#                     Depths and Scarlet Monastery (5-player heroic rows, not flex).
+#                     Depths, Scarlet Monastery and Ragefire Chasm (5-player heroic rows, not flex).
 #
 
-DungeonDifficulties.Heroic.Maps = "36 33 289 329 229 230 189"
+DungeonDifficulties.Heroic.Maps = "36 33 289 329 229 230 189 389"
 
 #
 #    DungeonDifficulties.ReferenceHealth
-#        Description: Reference health rows "<level>[tier]:<nonTank>:<tank>", the same format and value as
-#                     BossMechanics.ReferenceHealth.Rows (paste the same string into both). The rule reads the
-#                     non-tank column: the heroic (h) row at the caster's level over the normal row at the
-#                     caster's normal level. Without an "h" row heroic reads the normal rows by level. A malformed
-#                     value logs a warning and uses the default.
+#        Description: Reference health rows "<level>[tier]:<nonTank>:<tank>", the same format as
+#                     BossMechanics.ReferenceHealth.Rows and the same rows WITHOUT row 16: when pasting that string
+#                     here, drop "16:1100:1080" (it would move Deadmines' level 17 to 19 heroic stock spells, which
+#                     read the first row, level 20). The rule reads the non-tank column: the heroic (h) row at the
+#                     caster's level over the normal row at the caster's normal level. Without an "h" row heroic
+#                     reads the normal rows by level. A malformed value logs a warning and uses the default.
 #        Default:     "20:1300:1290 60:3670:3710 60h:4120:4110" - the E3 measurement (2026-11-05)
-#                     This file ships BossMechanics.ReferenceHealth.Rows as of the Scarlet Monastery build (the REF
+#                     This file ships BossMechanics.ReferenceHealth.Rows without row 16 (the REF
 #                     rows 35 / 40 and the Blackrock Depths rows 52-56): a heroic stock spell of a level 35-40 caster
 #                     reads its own normal row instead of the 20-60 line (about 7-8% under at 35 / 40).
 #
