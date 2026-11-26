@@ -115,8 +115,8 @@ at 16 would also move the level 17 to 19 stock heroic spells of Deadmines).
 Zul'Farrak (209, a 5-player heroic row, not flex) is in the conf dist's list. Three stock casts of its creatures have a
 `spelldifficulty_dbc` row that swaps on heroic (read-only SELECTs 2026-11-25): Zum'rah's Shadow Bolt 12739 (to 15472),
 and the Sandfury Shadowcaster's 12471 (to 15232) and 14032 (to 15654). The reworked bosses cast copies from their own
-slice (213840-214239), Zum'rah's bolt among them, so only the trash casts reach the swap. Its level 43 to 46 normal
-casters read the rows of `ReferenceHealth` between 40 and 52 (interpolated).
+slice (213840-214239), Zum'rah's bolt among them, so only the trash casts reach the swap. Normal is
+untouched.
 
 ## Config
 
