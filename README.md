@@ -112,12 +112,18 @@ reworked bosses use spells of their own slice (213540-213799). Its level 13 to 1
 its normal share: BM's own ReferenceHealth has the level 16 row (`16:1100:1080`), this one deliberately does not (a row
 at 16 would also move the level 17 to 19 stock heroic spells of Deadmines).
 
+Zul'Farrak (209, a 5-player heroic row, not flex) is in the conf dist's list. Three stock casts of its creatures have a
+`spelldifficulty_dbc` row that swaps on heroic (read-only SELECTs 2026-11-25): Zum'rah's Shadow Bolt 12739 (to 15472),
+and the Sandfury Shadowcaster's 12471 (to 15232) and 14032 (to 15654). The reworked bosses cast copies from their own
+slice (213840-214239), Zum'rah's bolt among them, so only the trash casts reach the swap. Normal is
+untouched.
+
 ## Config
 
 | Key | Default | What |
 | --- | --- | --- |
 | `DungeonDifficulties.Enable` | `1` | the hook |
-| `DungeonDifficulties.Heroic.Maps` | `36` (conf dist: `36 33 289 329 229 230 189 389`) | maps the heroic rule acts on |
+| `DungeonDifficulties.Heroic.Maps` | `36` (conf dist: `36 33 289 329 229 230 189 389 209`) | maps the heroic rule acts on |
 | `DungeonDifficulties.ReferenceHealth` | `20:1300:1290 60:3670:3710 60h:4120:4110` | BM's `ReferenceHealth.Rows` without row 16 |
 | `DungeonDifficulties.Heroic.SpellExceptions` | empty | stock spell ids left unscaled (cast or source id) |
 | `DungeonDifficulties.Heroic.RequireHeroicTemplate` | `1` | scale only casters with a heroic template |
