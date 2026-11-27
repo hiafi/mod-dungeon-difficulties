@@ -118,12 +118,19 @@ and the Sandfury Shadowcaster's 12471 (to 15232) and 14032 (to 15654). The rewor
 slice (213840-214239), Zum'rah's bolt among them, so only the trash casts reach the swap. Normal is
 untouched.
 
+Gnomeregan (90, a 5-player heroic row, not flex) is in the conf dist's list. Of the spells its creatures cast through a
+SmartAI cast action (read-only SELECTs 2026-11-26; `creature_template_spell`, action lists and C++ casts not read) only
+one has a `spelldifficulty_dbc` row that swaps on heroic: Arcing Smash 8374 (to 38761), cast by the Caverndeep Reaver
+6211; the stock Crowd Pummeler's own cast of it is replaced by the rework's copy. None of the six double-use ids is cast
+as itself on the map. The reworked bosses cast copies from their own slice (214280-214679), so only the Reaver's
+cast reaches the swap. Normal is untouched.
+
 ## Config
 
 | Key | Default | What |
 | --- | --- | --- |
 | `DungeonDifficulties.Enable` | `1` | the hook |
-| `DungeonDifficulties.Heroic.Maps` | `36` (conf dist: `36 33 289 329 229 230 189 389 209`) | maps the heroic rule acts on |
+| `DungeonDifficulties.Heroic.Maps` | `36` (conf dist: `36 33 289 329 229 230 189 389 209 90`) | maps the heroic rule acts on |
 | `DungeonDifficulties.ReferenceHealth` | `20:1300:1290 60:3670:3710 60h:4120:4110` | BM's `ReferenceHealth.Rows` without row 16 |
 | `DungeonDifficulties.Heroic.SpellExceptions` | empty | stock spell ids left unscaled (cast or source id) |
 | `DungeonDifficulties.Heroic.RequireHeroicTemplate` | `1` | scale only casters with a heroic template |
